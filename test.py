@@ -1,3 +1,121 @@
+import asyncio
+import json
+import logging
+import os
+import yaml
+from typing import Any
+
+import aiohttp
+import azure.functions as func
+from azure.identity.aio import ClientSecretCredential
+from azure.mgmt.containerservice.aio import ContainerServiceClient
+from azure.mgmt.subscription.aio import SubscriptionClient
+
+# Constants
+COMCD_AKS_DISPLAY_NAME = "comcd-aks"
+
+async def remove_customer_spn_secret(key_id, object_id, token):
+    # ... (unchanged)
+
+async def get_customer_spn_secret_values(object_id, token):
+    # ... (unchanged)
+
+async def get_aks_onb_info(customer_client_id, customer_client_secret, customer_tenant_id,
+                           subscription_id, resource_group_name, aks_cluster_name):
+    # ... (unchanged)
+
+async def get_object_and_app_id_for_customer_spn(customer_k8s_admin, token, subscription_name) -> Any | None:
+    # ... (unchanged)
+
+async def get_subscription_name_from_id(tenant_id, client_id, client_secret, subscription_id):
+    # ... (unchanged)
+
+async def get_token(tenant_id, client_id, client_secret, scope):
+    # ... (unchanged)
+
+async def get_managed_cluster(tenant_id, client_id, client_secret, subscription_id, resource_group_name,
+                              aks_cluster_name):
+    # ... (unchanged)
+
+async def fetch_aks_onboarding_info(customer_tenant_id, comcd_client_id, comcd_client_secret,
+                                    subscription_id, resource_group_name, aks_cluster_name,
+                                    customer_k8s_admin, graph_token):
+    try:
+        # Fetch object_and_app_id, customer_spn_secret, and onb_info concurrently
+        fetch_tasks = [
+            get_object_and_app_id_for_customer_spn(customer_k8s_admin, graph_token, subscription_name),
+            get_customer_spn_secret_values(json.loads(object_and_app_id)['object_id'], graph_token),
+            get_aks_onb_info(customer_client_id, customer_client_secret, customer_tenant_id,
+                             subscription_id, resource_group_name, aks_cluster_name)
+        ]
+
+        object_and_app_id, customer_spn_secret, onb_info = await asyncio.gather(*fetch_tasks)
+
+        return object_and_app_id, customer_spn_secret, onb_info
+
+    except Exception as e:
+        error = e
+        logging.error(f"[PART1] Onboarding info retrieval failed, Error: {error}")
+        if json.loads(customer_spn_secret)['keyId']:
+            await remove_customer_spn_secret(
+                json.loads(customer_spn_secret)['keyId'],
+                json.loads(object_and_app_id)['object_id'],
+                graph_token
+            )
+        return None, None, None
+
+async def main(req: func.HttpRequest) -> func.HttpResponse:
+    # Init Variables
+    global onb_info, customer_spn_secret, object_and_app_id, graph_token, error
+
+    # ComCD SPN credentials
+    comcd_client_id = os.getenv("AZURE_CLIENT_ID")
+    comcd_client_secret = os.getenv("AZURE_CLIENT_SECRET")
+
+    # Get parameters
+    customer_tenant_id = req.params.get('tenant_id')
+    subscription_id = req.params.get('subscription_id')
+    resource_group_name = req.params.get('resource_group_name')
+    aks_cluster_name = req.params.get('aks_cluster_name')
+    customer_k8s_admin = req.params.get('customer_k8s_admin')
+
+    logging.info(f"Getting aks_onb_info for AKS {subscription_id}/{resource_group_name}/{aks_cluster_name}")
+
+    try:
+        graph_token = await get_token(customer_tenant_id, comcd_client_id, comcd_client_secret,
+                                      https://graph.microsoft.com/.default)
+
+       subscription_name = await get_subscription_name_from_id(customer_tenant_id, comcd_client_id,
+                                                                comcd_client_secret, subscription_id)
+
+        object_and_app_id, customer_spn_secret, onb_info = await fetch_aks_onboarding_info(
+            customer_tenant_id, comcd_client_id, comcd_client_secret, subscription_id,
+            resource_group_name, aks_cluster_name, customer_k8s_admin, graph_token
+        )
+
+        if onb_info and \
+            json.loads(onb_info)['ca_cert'] and \
+            json.loads(onb_info)['server'] and \
+            json.loads(onb_info)['token']:
+            return func.HttpResponse(onb_info, status_code=200)
+        else:
+            return func.HttpResponse(
+                json.dumps({"error_message": f"[PART2] Onboarding info retrieval failed, Error: {error}"}),
+                status_code=500
+            )
+
+    except Exception as e:
+        error = e
+        logging.error(json.dumps(
+            {f"attempt_{attempt}_error_message": f"[PART2] Onboarding info retrieval failed, Error: {error}"}
+        ))
+        return func.HttpResponse(
+            json.dumps({"error_message": f"[PART2] Onboarding info retrieval failed, Error: {error}"}),
+            status_code=500
+        )
+
+
+
 # Import statements and constants (unchanged)
 
 async def remove_customer_spn_secret(key_id, object_id, token):
