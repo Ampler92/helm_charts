@@ -1,3 +1,78 @@
+# Import statements and constants (unchanged)
+
+async def remove_customer_spn_secret(key_id, object_id, token):
+    # ... (unchanged)
+
+async def get_customer_spn_secret_values(object_id, token):
+    # ... (unchanged)
+
+async def get_aks_onb_info(customer_client_id, customer_client_secret, customer_tenant_id,
+                           subscription_id, resource_group_name, aks_cluster_name):
+    # ... (unchanged)
+
+async def get_object_and_app_id_for_customer_spn(customer_k8s_admin, token, subscription_name) -> Any | None:
+    # ... (unchanged)
+
+async def get_subscription_name_from_id(tenant_id, client_id, client_secret, subscription_id):
+    # ... (unchanged)
+
+async def get_token(tenant_id, client_id, client_secret, scope):
+    # ... (unchanged)
+
+async def get_managed_cluster(tenant_id, client_id, client_secret, subscription_id, resource_group_name,
+                              aks_cluster_name):
+    # ... (unchanged)
+
+async def fetch_aks_onboarding_info(customer_tenant_id, comcd_client_id, comcd_client_secret,
+                                    subscription_id, resource_group_name, aks_cluster_name,
+                                    customer_k8s_admin, graph_token):
+    try:
+        # ... (unchanged)
+
+async def main(req: func.HttpRequest) -> func.HttpResponse:
+    # ComCD SPN credentials (unchanged)
+
+    # Get parameters (unchanged)
+
+    logging.info(f"Getting aks_onb_info for AKS {subscription_id}/{resource_group_name}/{aks_cluster_name}")
+
+    try:
+        graph_token = await get_token(customer_tenant_id, comcd_client_id, comcd_client_secret,
+                                      https://graph.microsoft.com/.default)
+
+        subscription_name = await get_subscription_name_from_id(customer_tenant_id, comcd_client_id,
+                                                                comcd_client_secret, subscription_id)
+
+        object_and_app_id, customer_spn_secret, onb_info = await fetch_aks_onboarding_info(
+            customer_tenant_id, comcd_client_id, comcd_client_secret, subscription_id,
+            resource_group_name, aks_cluster_name, customer_k8s_admin, graph_token
+        )
+
+        if onb_info and \
+            json.loads(onb_info)['ca_cert'] and \
+            json.loads(onb_info)['server'] and \
+            json.loads(onb_info)['token']:
+            return func.HttpResponse(onb_info, status_code=200)
+        else:
+            return func.HttpResponse(
+                json.dumps({"error_message": f"[PART2] Onboarding info retrieval failed, Error: {error}"}),
+                status_code=500
+            )
+
+    except Exception as e:
+        error = e
+        logging.error(json.dumps(
+            {f"attempt_{attempt}_error_message": f"[PART2] Onboarding info retrieval failed, Error: {error}"}
+        ))
+        return func.HttpResponse(
+            json.dumps({"error_message": f"[PART2] Onboarding info retrieval failed, Error: {error}"}),
+            status_code=500
+        )
+
+
+
+
+
 import unittest
 from unittest.mock import patch, MagicMock
 from main import process_webhook
