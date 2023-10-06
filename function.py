@@ -1,3 +1,75 @@
+import unittest
+from unittest.mock import Mock, patch
+from azure.functions import HttpRequest
+from your_function_module import comcd_aks_onboarding
+
+class TestYourAzureFunction(unittest.TestCase):
+
+    def setUp(self):
+        # Initialize any required environment variables or test data
+        pass
+
+    def tearDown(self):
+        # Clean up after each test if needed
+        pass
+
+    @patch("your_function_module.get_certificate_credential")
+    @patch("your_function_module.get_subscription_name_from_id")
+    @patch("your_function_module.get_application_by_display_name")
+    @patch("your_function_module.iterate_fetch_aks_onb_info")
+    @patch("your_function_module.GraphServiceClient")
+    def test_comcd_aks_onboarding(self, MockGraphServiceClient, MockIterateFetch,
+                                  MockGetAppByName, MockGetSubName, MockGetCertCred):
+
+        # Prepare mock objects and data
+        mock_graph_client = Mock()
+        MockGraphServiceClient.return_value = mock_graph_client
+
+        mock_cert_creds = Mock()
+        MockGetCertCred.return_value = mock_cert_creds
+
+        mock_subscription_name = "TestSubscription"
+        MockGetSubName.return_value = mock_subscription_name
+
+        mock_app = Mock()
+        MockGetAppByName.return_value = mock_app
+
+        mock_onb_info = '{"server": "https://example.com", "token": "test_token", "ca_cert": "test_cert"}'
+        MockIterateFetch.return_value = mock_onb_info
+
+        # Create an HTTP request with required parameters
+        request = HttpRequest(
+            method='GET',
+            url='http://localhost/api/comcd_aks_onboarding',
+            params={
+                'tenant_id': 'test_tenant',
+                'subscription_id': 'test_subscription',
+                'resource_group_name': 'test_resource_group',
+                'aks_cluster_name': 'test_cluster',
+                'customer_k8s_admin': 'test_admin'
+            }
+        )
+
+        # Call your Azure Function
+        response = comcd_aks_onboarding(request)
+
+        # Assertions
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_body().decode(), mock_onb_info)
+
+        # Verify that your function was called with the expected parameters
+        MockGetCertCred.assert_called_once_with('test_tenant', 'test_client_id')
+        MockGraphServiceClient.assert_called_once_with(credentials=mock_cert_creds)
+        MockGetSubName.assert_called_once_with(mock_cert_creds, 'test_subscription')
+        MockGetAppByName.assert_called_once_with(mock_graph_client, 'test_admin', mock_subscription_name)
+        MockIterateFetch.assert_called_once_with(mock_cert_creds, 'test_subscription', 'test_resource_group', 'test_cluster')
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+
+
 import json
 import os
 import subprocess
