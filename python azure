@@ -1,0 +1,36 @@
+import requests
+
+# Kubernetes API server URL and the target pod's details
+api_server = 'https://your-kubernetes-api-server'
+namespace = 'your-namespace'
+pod_name = 'your-pod-name'
+container_name = 'your-container-name'  # Optional if only one container exists
+bearer_token = 'your-access-token'
+file_path = '/path/to/your/file.txt'
+
+# Construct the API URL for exec
+exec_url = f"{api_server}/api/v1/namespaces/{namespace}/pods/{pod_name}/exec"
+
+# Prepare the query parameters for the exec command
+params = {
+    'stdin': 'true',
+    'stdout': 'true',
+    'stderr': 'true',
+    'tty': 'true',
+    'container': container_name,
+    'command': '/bin/sh',
+    'command': '-c',
+    'command': f'cat {file_path}'
+}
+
+# Prepare the HTTP headers
+headers = {
+    'Authorization': f'Bearer {bearer_token}',
+    'Content-Type': 'application/json'
+}
+
+# Make the request to execute the command
+response = requests.post(exec_url, headers=headers, params=params, verify=False)
+
+# Print the response - Depending on your command, you might need to handle streaming differently
+print(response.text)
