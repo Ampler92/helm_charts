@@ -1,4 +1,4 @@
-Streaming logs from a Kubernetes pod directly via the Kubernetes API without using kubectl and without dealing with WebSocket complexities in PowerShell involves using the HTTP GET request to the log streaming API endpoint. The logs API (/api/v1/namespaces/{namespace}/pods/{pod}/log) supports streaming logs without upgrading to WebSockets, making it simpler for scenarios like this.Here’s how you can achieve it in PowerShell:PrerequisitesEnsure you have a valid Bearer token for authentication with the Kubernetes API server. This token must be included in the HTTP request headers for authorization.PowerShell Script ExampleThis example demonstrates how to stream logs from a specific pod using the Kubernetes REST API. It uses the Invoke-RestMethod cmdlet available in PowerShell to make a GET request to the logs endpoint.# Variables
+You're right; the -Stream parameter I mentioned does not exist for Invoke-RestMethod or Invoke-WebRequest in PowerShell. My mistake there. For continuously streaming data like logs from a pod via the Kubernetes API, the direct approach in PowerShell is more complex due to this limitation.A workaround is to call curl from PowerShell, as curl (or Invoke-WebRequest in PowerShell Core/PowerShell 7, where it's an alias to curl) supports streaming. Here's how you can adapt the previous example to use curl in PowerShell for streaming logs:Using curl in PowerShell for Streaming Logs# Variables
 $apiServer = "https://<your-kubernetes-api-server>"
 $namespace = "your-namespace"
 $podName = "your-pod-name"
@@ -7,21 +7,9 @@ $token = "your-bearer-token"
 # Kubernetes API endpoint for pod logs
 $logUrl = "$apiServer/api/v1/namespaces/$namespace/pods/$podName/log?follow=true"
 
-# Headers for authentication
-$headers = @{
-    Authorization = "Bearer $token"
-}
+# Command to stream logs using curl
+$curlCommand = "curl --header `"Authorization: Bearer $token`" -k $logUrl"
 
-# Stream the logs
-try {
-    # Note: This request will keep the connection open and stream logs continuously
-    $response = Invoke-RestMethod -Uri $logUrl -Headers $headers -Method Get -Stream
-    foreach ($line in $response) {
-        # Process each line of log output here
-        Write-Output $line
-    }
-}
-catch {
-    Write-Error "Failed to stream logs: $_"
-}
-Replace <your-kubernetes-api-server>, your-namespace, your-pod-name, and your-bearer-token with your actual Kubernetes API server address, namespace, pod name, and a valid Bearer token, respectively.Important NotesAPI Server URL: Ensure you use the correct protocol (https) and API server address. The API server URL is typically something like https://<api-server-address>.Authentication:
+# Execute the curl command
+Invoke-Expression $curlCommand
+Important NotesAuthentication: Replace <your-kubernetes-api-server>, your-namespace, your-pod-name, and your-bearer-token with your actual Kubernetes API server address, namespace, pod name, and a valid Bearer token.Security: The -k option in the curl command disables SSL certificate verification. This is generally not recommended in production environments. It's used here for simplicity and should be replaced with proper certificate verification in secure setups.PowerShell Core/PowerShell 7: If you are using PowerShell Core or PowerShell 7, curl is an alias for Invoke-WebRequest. In these versions, you might prefer using the native Invoke-WebRequest cmdlet with its native syntax for consistency with PowerShell scripting practices.Streaming Limitation: PowerShell's native cmdlets (Invoke-WebRequest and Invoke-RestMethod) prior to PowerShell 7 do not directly support streaming the response body from a continuously open HTTP connection. Using external tools like curl can be a workaround for such scenarios.This workaround leverages external command-line tools to achieve functionality not directly supported by PowerShell's native cmdlets in versions prior to PowerShell 7. It's a practical approach to stream logs or other continuous data from web APIs within PowerShell scripts.
