@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Define the resource type
+resource_type="workflows"
+
+# Loop through all namespaces or specify a particular namespace
+for namespace in $(kubectl get ns --no-headers | cut -d " " -f1); do
+  # Get workflows that are in the deleting state with finalizers
+  kubectl get $resource_type -n $namespace --field-selector 'metadata.deletionTimestamp!=nil' -o json | jq -r '.items[] | select(.metadata.finalizers!=null) | .metadata.name' | while read workflow_name; do
+    # Remove finalizers
+    echo "Removing finalizers for workflow $workflow_name in namespace $namespace..."
+    kubectl patch $resource_type $workflow_name -n $namespace -p '{"metadata":{"finalizers":[]}}' --type=merge
+    echo "Finalizers removed for workflow $workflow_name in namespace $namespace"
+  done
+done
