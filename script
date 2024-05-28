@@ -1,15 +1,75 @@
+To delete all resources of a certain type with a specific prefix using `kubectl`, you can use a combination of `kubectl get` to list the resources and `kubectl delete` to remove them. Below is a script to delete all resources of a specified type with a given prefix in all namespaces or a specified namespace.
+
+### Script to Delete Resources with a Specific Prefix
+
+```bash
 #!/bin/bash
 
-# Define the resource type
-resource_type="workflows"
+# Type of resource to delete, e.g., pod, deployment, service, etc.
+RESOURCE_TYPE=$1
+# Prefix to match
+PREFIX=$2
+# Optional namespace; if not provided, it defaults to all namespaces
+NAMESPACE=$3
 
-# Loop through all namespaces or specify a particular namespace
-for namespace in $(kubectl get ns --no-headers | cut -d " " -f1); do
-  # Get workflows that are in the deleting state with finalizers
-  kubectl get $resource_type -n $namespace --field-selector 'metadata.deletionTimestamp!=nil' -o json | jq -r '.items[] | select(.metadata.finalizers!=null) | .metadata.name' | while read workflow_name; do
-    # Remove finalizers
-    echo "Removing finalizers for workflow $workflow_name in namespace $namespace..."
-    kubectl patch $resource_type $workflow_name -n $namespace -p '{"metadata":{"finalizers":[]}}' --type=merge
-    echo "Finalizers removed for workflow $workflow_name in namespace $namespace"
+if [ -z "$RESOURCE_TYPE" ] || [ -z "$PREFIX" ]; then
+  echo "Usage: $0 <resource-type> <prefix> [namespace]"
+  exit 1
+fi
+
+if [ -z "$NAMESPACE" ]; then
+  # Get all resources of the specified type in all namespaces with the specified prefix
+  resources=$(kubectl get "$RESOURCE_TYPE" --all-namespaces -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name | grep "^$PREFIX")
+
+  if [ -z "$resources" ]; then
+    echo "No resources found with prefix '$PREFIX'."
+    exit 0
+  fi
+
+  # Delete the resources
+  echo "$resources" | while read -r namespace name; do
+    kubectl delete "$RESOURCE_TYPE" -n "$namespace" "$name"
   done
-done
+else
+  # Get all resources of the specified type in the specified namespace with the specified prefix
+  resources=$(kubectl get "$RESOURCE_TYPE" -n "$NAMESPACE" -o custom-columns=NAME:.metadata.name | grep "^$PREFIX")
+
+  if [ -z "$resources" ]; then
+    echo "No resources found with prefix '$PREFIX' in namespace '$NAMESPACE'."
+    exit 0
+  fi
+
+  # Delete the resources
+  echo "$resources" | while read -r name; do
+    kubectl delete "$RESOURCE_TYPE" -n "$NAMESPACE" "$name"
+  done
+fi
+
+echo "Deletion of resources with prefix '$PREFIX' completed."
+```
+
+### How to Use the Script
+
+1. Save the script to a file, e.g., `delete_resources_with_prefix.sh`.
+2. Make the script executable by running:
+   ```bash
+   chmod +x delete_resources_with_prefix.sh
+   ```
+3. Run the script with the appropriate arguments:
+   ```bash
+   ./delete_resources_with_prefix.sh <resource-type> <prefix> [namespace]
+   ```
+
+### Example Usages:
+
+- To delete all pods with the prefix `mypod-` in all namespaces:
+  ```bash
+  ./delete_resources_with_prefix.sh pod mypod-
+  ```
+
+- To delete all services with the prefix `myservice-` in a specific namespace `mynamespace`:
+  ```bash
+  ./delete_resources_with_prefix.sh service myservice- mynamespace
+  ```
+
+This script ensures that all resources of the specified type and prefix are deleted, either across all namespaces or within a specific namespace, depending on the provided arguments.
